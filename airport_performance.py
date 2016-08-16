@@ -39,7 +39,7 @@ from_to_destinations = (rows.map(lambda line: line.split(','))
 # Generate a CSV file with the results of from_to_destinations
 print('Saving data as CSV to local file')
 with open(local_results, 'wb') as csv_file:
-    wr = csv.writer(csv_file, quoting=csv.QUOTE_ALL)
+    wr = csv.writer(csv_file, quoting=csv.QUOTE_MINIMAL)
     for line in from_to_destinations:
         wr.writerow(line)
 
