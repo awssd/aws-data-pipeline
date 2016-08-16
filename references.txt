@@ -1,0 +1,17 @@
+https://controlf1.wordpress.com/2015/08/12/adventures-in-spark-on-elastic-mapreduce-4/comment-page-1/
+
+https://www.themarketingtechnologist.co/upload-your-local-spark-script-to-an-aws-emr-cluster-using-a-simply-python-script/
+
+https://aws.amazon.com/blogs/aws/category/amazon-emr/
+
+https://aws.amazon.com/blogs/aws/new-apache-spark-on-amazon-emr/
+
+http://docs.aws.amazon.com/ElasticMapReduce/latest/ReleaseGuide/emr-spark-submit-step.html
+
+http://docs.aws.amazon.com/ElasticMapReduce/latest/ReleaseGuide/emr-spark-launch.html
+
+http://docs.aws.amazon.com/datapipeline/latest/DeveloperGuide/dp-object-emractivity.html
+
+http://www.transtats.bts.gov/DL_SelectFields.asp?Table_ID=236&DB_Short_Name=On-Time
+
+http://docs.aws.amazon.com/datapipeline/latest/DeveloperGuide/dp-pipeline-objects.html

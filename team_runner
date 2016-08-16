@@ -1,0 +1,201 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import argparse
+import json
+import os
+
+import boto3
+from botocore.exceptions import ClientError
+
+
+class TeamRunner(object):
+
+    emr_code = 'emr-code/airport_performance.py'
+    emr_input = 'emr-input/791696577_T_ONTIME_2015-01.csv'
+    emr_output = 'emr-output/san-diego-flights.csv'
+
+    def __init__(self):
+        self._team_name = None
+        parser = argparse.ArgumentParser(description='Create Team resources for AWS Magic Night - Data Pipeline.')
+        parser.add_argument('-t', '--team-name', required=True, help='The name of the your team, e.g. "team-1".')
+        parser.add_argument('-f', '--description-file', required=True, type=self.__get_real_path, help='Pipeline description file.')
+        parser.add_argument('-k', '--key-pair', default=None, help='Optional value with the name of the AWS Key Pair.')
+        parser.add_argument('-p', '--profile', default=None, help='Boto profile use if different from "default".')
+        parser.add_argument('-c', '--create-resources', action='store_true', help='Create resources for magic night".')
+        self.__args = parser.parse_args()
+        self.__session = boto3.Session(profile_name=self.__args.profile)
+        self._team_name = self.__args.team_name
+
+    @property
+    def bucket_name(self):
+        return self._team_name + '-data-pipeline-magic-night'
+
+    def run(self):
+        description = self.__read_file(self.__args.description_file)
+        try:
+            if self.__args.create_resources:
+                self.__create_resources(self.__session.client('s3'))
+            self.__create_data_pipeline(self.__session.client('datapipeline'), description)
+        except ClientError as e:
+            raise
+
+    def __create_data_pipeline(self, dp_client, dp_description):
+        """
+        :type dp_client: boto3.client
+        :type dp_description: dict
+        :rtype: str
+        """
+        # Create/Update Pipeline
+        response = dp_client.create_pipeline(
+            name=self._team_name,
+            uniqueId=self._team_name + 'uniqueid',
+        )
+
+        # Parse parameters from json definition
+        pipeline_id = response['pipelineId']
+        pipeline_objects = TeamRunner.__get_boto_compliant_objects(dp_description['objects'])
+        parameter_objects = TeamRunner.__get_boto_compliant_parameters(dp_description['parameters'])
+        parameter_values = TeamRunner.__get_boto_compliant_parameter_values(dp_description['values'])
+        parameter_values.append({
+            'id': 'myPythonScriptLocation',
+            'stringValue': 's3://{0}/{1}'.format(self.bucket_name, self.emr_code)
+        })
+        parameter_values.append({
+            'id': 'myInputData',
+            'stringValue': 's3://{0}/{1}'.format(self.bucket_name, self.emr_input)
+        })
+        parameter_values.append({
+            'id': 'myOutputData',
+            'stringValue': 's3://{0}/{1}'.format(self.bucket_name, self.emr_output)
+        })
+        parameter_values.append({
+            'id': 'myLogs',
+            'stringValue': 's3://{0}/logs'.format(self.bucket_name)
+        })
+        if self.__args.key_pair is not None:
+            parameter_values.append({
+                'id': 'myEC2KeyPair',
+                'stringValue': self.__args.key_pair
+            })
+
+        # Put the pipeline definition
+        response = dp_client.put_pipeline_definition(
+            pipelineId=pipeline_id,
+            pipelineObjects=pipeline_objects,
+            parameterObjects=parameter_objects,
+            parameterValues=parameter_values
+        )
+
+        # Print errors and warnings
+        if len(response['validationErrors']):
+            print('FOUND VALIDATION ERRORS:')
+            for error in response['validationErrors'][0]['errors']:
+                print(error)
+        if len(response['validationWarnings']):
+            print('FOUND VALIDATION WARNINGS:')
+            for error in response['validationWarnings'][0]['warnings']:
+                print(error)
+        return response
+
+    def __create_resources(self, s3):
+        s3.create_bucket(Bucket=self.bucket_name)
+        s3.put_object(Bucket=self.bucket_name, Key='emr-code/')
+        s3.put_object(Bucket=self.bucket_name, Key='emr-input/')
+        s3.put_object(Bucket=self.bucket_name, Key='emr-output/')
+        s3.copy_object(
+            Bucket=self.bucket_name,
+            Key=self.emr_code,
+            CopySource={'Bucket': 'aws-datapipeline-magic-night', 'Key': self.emr_code}
+        )
+        s3.copy_object(
+            Bucket=self.bucket_name,
+            Key=self.emr_input,
+            CopySource={'Bucket': 'aws-datapipeline-magic-night', 'Key': self.emr_input}
+        )
+
+    @staticmethod
+    def __read_file(path):
+        """
+        :type path: str
+        :rtype: dict
+        """
+        with open(path) as data_file:
+            config = json.load(data_file)
+        return config
+
+    @staticmethod
+    def __get_boto_compliant_objects(objects):
+        pipeline_objects = []
+        for objects in objects:
+            boto_compliant_object = {}
+            fields = []
+            for key, value in objects.items():
+                if key == 'id':
+                    boto_compliant_object['id'] = value
+                elif key == 'name':
+                    boto_compliant_object['name'] = value
+                elif isinstance(value, dict):
+                    fields.append({
+                        'key': key,
+                        'refValue': value['ref']
+                    })
+
+                elif isinstance(value, list):
+                    for array_value in value:
+                        fields.append({
+                            'key': key,
+                            'stringValue': array_value
+                        })
+                else:
+                    fields.append({
+                        'key': key,
+                        'stringValue': value
+                    })
+            boto_compliant_object['fields'] = fields
+            pipeline_objects.append(boto_compliant_object)
+        return pipeline_objects
+
+    @staticmethod
+    def __get_boto_compliant_parameters(parameters):
+        pipeline_parameters = []
+        for parameter in parameters:
+            boto_compliant_parameter = {}
+            attributes = []
+            for key, value in parameter.items():
+                if key == 'id':
+                    boto_compliant_parameter['id'] = value
+                else:
+                    attributes.append({
+                        'key': key,
+                        'stringValue': value
+                    })
+            boto_compliant_parameter['attributes'] = attributes
+            pipeline_parameters.append(boto_compliant_parameter)
+        return pipeline_parameters
+
+    @staticmethod
+    def __get_boto_compliant_parameter_values(values):
+        pipeline_parameters_values = []
+        for key, value in values.items():
+            pipeline_parameters_values.append({
+                'id': key,
+                'stringValue': value
+            })
+        return pipeline_parameters_values
+
+    @staticmethod
+    def __get_real_path(path):
+        """
+        Get the absolute path to the file or directory
+        :param path: Path to the file or directory
+        :type path: str
+        :return: Absolute path to file or directory
+        :rtype: str
+        """
+        return os.path.abspath(os.path.realpath(os.path.expanduser(path)))
+
+
+if __name__ == '__main__':
+    team_runner = TeamRunner()
+    print(team_runner.run())
