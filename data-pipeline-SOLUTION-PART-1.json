@@ -1,0 +1,173 @@
+{
+  "objects": [
+    {
+      "period": "1 days",
+      "name": "Every 1 day",
+      "id": "DefaultSchedule",
+      "type": "Schedule",
+      "startAt": "FIRST_ACTIVATION_DATE_TIME"
+    },
+    {
+      "taskInstanceType": "#{myTaskInstanceType}",
+      "bootstrapAction": "#{myBootstrapAction}",
+      "role": "DataPipelineDefaultRole",
+      "taskInstanceCount": "#{myTaskInstanceCount}",
+      "name": "EmrClusterObj",
+      "keyPair": "#{myEC2KeyPair}",
+      "masterInstanceType": "#{myMasterInstanceType}",
+      "releaseLabel": "#{myEMRReleaseLabel}",
+      "id": "EmrClusterObj",
+      "type": "EmrCluster",
+      "terminateAfter": "50 Minutes",
+      "applications": "Spark"
+    },
+    {
+      "filePath": "#{myOutputData}",
+      "name": "S3OutputtDataLocation",
+      "id": "S3OutputDataLocation",
+      "dependsOn": {
+        "ref": "EmrActivityObj"
+      },
+      "type": "S3DataNode"
+    },
+    {
+      "name": "DataFormat1",
+      "id": "DataFormat1",
+      "type": "CSV"
+    },
+    {
+      "directoryPath": "#{myInputData}",
+      "dataFormat": {
+        "ref": "DataFormat1"
+      },
+      "name": "S3InputDataLocation",
+      "id": "S3InputDataLocation",
+      "type": "S3DataNode"
+    },
+    {
+      "output": {
+        "ref": "S3OutputDataLocation"
+      },
+      "input": {
+        "ref": "S3InputDataLocation"
+      },
+      "runsOn": {
+        "ref": "EmrClusterObj"
+      },
+      "name": "EmrActivityObj",
+      "step": [
+        "command-runner.jar,sudo,pip,install,boto3",
+        "command-runner.jar,hdfs,dfs,-get,#{myPythonScriptLocation},/mnt/",
+        "command-runner.jar,spark-submit,/mnt/airport_performance.py,#{myInputData},#{myOutputData}"
+      ],
+      "id": "EmrActivityObj",
+      "type": "EmrActivity"
+    },
+    {
+      "failureAndRerunMode": "CASCADE",
+      "schedule": {
+        "ref": "DefaultSchedule"
+      },
+      "resourceRole": "DataPipelineDefaultResourceRole",
+      "role": "DataPipelineDefaultRole",
+      "pipelineLogUri": "#{myLogs}",
+      "scheduleType": "cron",
+      "name": "Default",
+      "id": "Default"
+    }
+  ],
+  "parameters": [
+    {
+      "helpText": "An existing EC2 key pair to SSH into the master node of the EMR cluster as the user \"hadoop\".",
+      "description": "EC2 key pair",
+      "optional": "true",
+      "id": "myEC2KeyPair",
+      "type": "String"
+    },
+    {
+      "helpText": "Task instances run Hadoop tasks.",
+      "description": "Task node instance type",
+      "optional": "true",
+      "id": "myTaskInstanceType",
+      "type": "String"
+    },
+    {
+      "default": "m3.xlarge",
+      "helpText": "Core instances run Hadoop tasks and store data using the Hadoop Distributed File System (HDFS).",
+      "description": "Core node instance type",
+      "id": "myCoreInstanceType",
+      "type": "String"
+    },
+    {
+      "default": "emr-4.3.0",
+      "helpText": "Determines the base configuration of the instances in your cluster, including the Hadoop version.",
+      "description": "EMR Release Label",
+      "id": "myEMRReleaseLabel",
+      "type": "String"
+    },
+    {
+      "helpText": "s3://myBucket/emr-output/file.csv",
+      "description": "Output CSV",
+      "id": "myOutputData",
+      "type": "String"
+    },
+    {
+      "helpText": "s3://myBucket/emr-input/file.csv",
+      "description": "Input CSV",
+      "id": "myInputData",
+      "type": "String"
+    },
+    {
+      "helpText": "s3://myBucket/logs",
+      "description": "Logs location",
+      "id": "myLogs",
+      "type": "String"
+    },
+    {
+      "default": "2",
+      "description": "Core node instance count",
+      "id": "myCoreInstanceCount",
+      "type": "Integer"
+    },
+    {
+      "description": "Task node instance count",
+      "optional": "true",
+      "id": "myTaskInstanceCount",
+      "type": "Integer"
+    },
+    {
+      "helpLink": "https://docs.aws.amazon.com/console/datapipeline/emr_bootstrap_actions",
+      "helpText": "Bootstrap actions are scripts that are executed during setup before Hadoop starts on every cluster node.",
+      "description": "Bootstrap action(s)",
+      "isArray": "true",
+      "optional": "true",
+      "id": "myBootstrapAction",
+      "type": "String"
+    },
+    {
+      "watermark": "s3://myBucket/myPath/pythonscript.py",
+      "helpText": "This is an S3 bucket and key where the python script that will be executed is located",
+      "description": "Python Script Location",
+      "id": "myPythonScriptLocation",
+      "type": "String"
+    },
+    {
+      "default": "m3.xlarge",
+      "helpText": "The Master instance assigns Hadoop tasks to core and task nodes, and monitors their status.",
+      "description": "Master node instance type",
+      "id": "myMasterInstanceType",
+      "type": "String"
+    }
+  ],
+  "values": {
+    "myCoreInstanceType": "m3.xlarge",
+    "myTaskInstanceType": "m3.xlarge",
+    "myMasterInstanceType": "m3.xlarge",
+    "myCoreInstanceCount": "1",
+    "myEMRReleaseLabel": "emr-5.0.0",
+    "myLogs": "s3://aws-datapipeline-magic-night/logs",
+    "myPythonScriptLocation": "s3://aws-datapipeline-magic-night/emr-code/airport_performance.py",
+    "myInputData": "s3://aws-datapipeline-magic-night/emr-input/791696577_T_ONTIME_2015-01.csv",
+    "myOutputData": "s3://aws-datapipeline-magic-night/emr-output/san-diego-flights.csv"
+  }
+}

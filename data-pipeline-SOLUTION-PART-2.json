@@ -1,0 +1,288 @@
+{
+  "objects": [
+    {
+      "output": {
+        "ref": "S3OutputDataLocation"
+      },
+      "input": {
+        "ref": "S3InputDataLocation"
+      },
+      "name": "EmrActivityObj",
+      "step": [
+        "command-runner.jar,sudo,pip,install,boto3",
+        "command-runner.jar,hdfs,dfs,-get,#{myPythonScriptLocation},/mnt/",
+        "command-runner.jar,spark-submit,/mnt/airport_performance.py,#{myInputData},#{myOutputData}"
+      ],
+      "runsOn": {
+        "ref": "EmrClusterObj"
+      },
+      "id": "EmrActivityObj",
+      "type": "EmrActivity"
+    },
+    {
+      "schedule": {
+        "ref": "DefaultSchedule"
+      },
+      "database": {
+        "ref": "RdsMysql"
+      },
+      "name": "DestinationRDSTable",
+      "insertQuery": "INSERT INTO #{myRDSTableName} (date, origin, destination, delay) VALUES(?, ?, ?, ?) ;",
+      "id": "SqlDataNodeId",
+      "type": "SqlDataNode",
+      "table": "#{myRDSTableName}"
+    },
+    {
+      "failureAndRerunMode": "CASCADE",
+      "schedule": {
+        "ref": "DefaultSchedule"
+      },
+      "resourceRole": "DataPipelineDefaultResourceRole",
+      "role": "DataPipelineDefaultRole",
+      "pipelineLogUri": "#{myLogs}",
+      "scheduleType": "cron",
+      "name": "Default",
+      "id": "Default"
+    },
+    {
+      "dependsOn": {
+        "ref": "EmrActivityObj"
+      },
+      "filePath": "#{myOutputData}",
+      "name": "S3OutputtDataLocation",
+      "id": "S3OutputDataLocation",
+      "type": "S3DataNode"
+    },
+    {
+      "*password": "#{*myRDSPassword}",
+      "name": "RdsMysql",
+      "jdbcProperties": "allowMultiQueries=true",
+      "id": "RdsMysql",
+      "type": "RdsDatabase",
+      "rdsInstanceId": "#{myRDSInstanceId}",
+      "username": "#{myRDSUsername}"
+    },
+    {
+      "output": {
+        "ref": "SqlDataNodeId"
+      },
+      "input": {
+        "ref": "S3OutputDataLocation"
+      },
+      "schedule": {
+        "ref": "DefaultSchedule"
+      },
+      "dependsOn": {
+        "ref": "SqlActivityId"
+      },
+      "name": "DataLoadActivity",
+      "id": "CopyActivityId",
+      "runsOn": {
+        "ref": "Ec2Instance"
+      },
+      "type": "CopyActivity"
+    },
+    {
+      "taskInstanceType": "#{myTaskInstanceType}",
+      "bootstrapAction": "#{myBootstrapAction}",
+      "role": "DataPipelineDefaultRole",
+      "taskInstanceCount": "#{myTaskInstanceCount}",
+      "name": "EmrClusterObj",
+      "keyPair": "#{myEC2KeyPair}",
+      "masterInstanceType": "#{myMasterInstanceType}",
+      "releaseLabel": "#{myEMRReleaseLabel}",
+      "id": "EmrClusterObj",
+      "type": "EmrCluster",
+      "terminateAfter": "50 Minutes",
+      "applications": "Spark"
+    },
+    {
+      "directoryPath": "#{myInputData}",
+      "dataFormat": {
+        "ref": "DataFormat1"
+      },
+      "name": "S3InputDataLocation",
+      "id": "S3InputDataLocation",
+      "type": "S3DataNode"
+    },
+    {
+      "name": "DataFormat1",
+      "id": "DataFormat1",
+      "type": "CSV"
+    },
+    {
+      "period": "1 months",
+      "name": "Every 1 month",
+      "id": "DefaultSchedule",
+      "type": "Schedule",
+      "startAt": "FIRST_ACTIVATION_DATE_TIME"
+    },
+    {
+      "type": "Ec2Resource",
+      "id": "Ec2Instance",
+      "securityGroupIds": "sg-0fc15869",
+      "instanceType": "#{myEC2InstanceType}",
+      "name": "Ec2Instance",
+      "actionOnTaskFailure": "terminate",
+      "keyPair": "#{myEC2KeyPair}",
+      "terminateAfter": "2 Hours"
+    },
+    {
+      "schedule": {
+        "ref": "DefaultSchedule"
+      },
+      "database": {
+        "ref": "RdsMysql"
+      },
+      "dependsOn": {
+        "ref": "EmrActivityObj"
+      },
+      "name": "RdsMySqlTableCreateActivity",
+      "id": "SqlActivityId",
+      "runsOn": {
+        "ref": "Ec2Instance"
+      },
+      "type": "SqlActivity",
+      "script": "DROP TABLE IF EXISTS #{myRDSTableName};CREATE TABLE IF NOT EXISTS #{myRDSTableName} (`date` DATE, origin VARCHAR(128), destination VARCHAR(128), delay FLOAT);"
+    }
+  ],
+  "parameters": [
+    {
+      "description": "RDS MySQL password",
+      "id": "*myRDSPassword",
+      "type": "String"
+    },
+    {
+      "helpText": "s3://myBucket/emr-output/file.csv",
+      "description": "Output CSV",
+      "id": "myOutputData",
+      "type": "String"
+    },
+    {
+      "default": "m3.medium",
+      "helpText": "The Master instance assigns Hadoop tasks to core and task nodes, and monitors their status.",
+      "description": "Master node instance type",
+      "id": "myMasterInstanceType",
+      "type": "String"
+    },
+    {
+      "default": "m3.xlarge",
+      "helpText": "The EC2 resource instance that runs the SQL activities.",
+      "description": "EC2 instance type",
+      "id": "myEC2InstanceType",
+      "type": "String"
+    },
+    {
+      "helpText": "s3://myBucket/logs",
+      "description": "Logs location",
+      "id": "myLogs",
+      "type": "String"
+    },
+    {
+      "watermark": "DB Instance",
+      "description": "RDS Instance ID",
+      "id": "myRDSInstanceId",
+      "type": "String"
+    },
+    {
+      "default": "m3.xlarge",
+      "helpText": "Core instances run Hadoop tasks and store data using the Hadoop Distributed File System (HDFS).",
+      "description": "Core node instance type",
+      "id": "myCoreInstanceType",
+      "type": "String"
+    },
+    {
+      "helpText": "An existing EC2 key pair to SSH into the master node of the EMR cluster as the user \"hadoop\".",
+      "description": "EC2 key pair",
+      "optional": "true",
+      "id": "myEC2KeyPair",
+      "type": "String"
+    },
+    {
+      "watermark": "security group name",
+      "helpText": "The names of one or more EC2 security groups that have access to the RDS MySQL cluster.",
+      "description": "RDS MySQL security group(s)",
+      "isArray": "true",
+      "optional": "true",
+      "id": "myEc2RdsSecurityGroups",
+      "type": "String"
+    },
+    {
+      "helpText": "Task instances run Hadoop tasks.",
+      "description": "Task node instance type",
+      "optional": "true",
+      "id": "myTaskInstanceType",
+      "type": "String"
+    },
+    {
+      "default": "emr-4.3.0",
+      "helpText": "Determines the base configuration of the instances in your cluster, including the Hadoop version.",
+      "description": "EMR Release Label",
+      "id": "myEMRReleaseLabel",
+      "type": "String"
+    },
+    {
+      "description": "RDS MySQL username",
+      "id": "myRDSUsername",
+      "type": "String"
+    },
+    {
+      "helpText": "The name of an existing table or a new table that will be created based on the create table SQL query parameter below.",
+      "description": "RDS MySQL table name",
+      "id": "myRDSTableName",
+      "type": "String"
+    },
+    {
+      "helpText": "s3://myBucket/emr-input/file.csv",
+      "description": "Input CSV",
+      "id": "myInputData",
+      "type": "String"
+    },
+    {
+      "default": "2",
+      "description": "Core node instance count",
+      "id": "myCoreInstanceCount",
+      "type": "Integer"
+    },
+    {
+      "helpLink": "https://docs.aws.amazon.com/console/datapipeline/emr_bootstrap_actions",
+      "helpText": "Bootstrap actions are scripts that are executed during setup before Hadoop starts on every cluster node.",
+      "description": "Bootstrap action(s)",
+      "isArray": "true",
+      "optional": "true",
+      "id": "myBootstrapAction",
+      "type": "String"
+    },
+    {
+      "description": "Task node instance count",
+      "optional": "true",
+      "id": "myTaskInstanceCount",
+      "type": "Integer"
+    },
+    {
+      "helpText": "This is an S3 bucket and key where the python script that will be executed is located",
+      "watermark": "s3://myBucket/myPath/pythonscript.py",
+      "description": "Python Script Location",
+      "id": "myPythonScriptLocation",
+      "type": "String"
+    }
+  ],
+  "values": {
+    "myTaskInstanceType": "m3.xlarge",
+    "myRDSInstanceId": "datapipeline-magic-night",
+    "myEMRReleaseLabel": "emr-5.0.0",
+    "myPythonScriptLocation": "s3://<TEAM_S3_BUCKET>/emr-code/airport_performance.py",
+    "myEc2RdsSecurityGroups": "<VALID_EC2_SECURITY_GROUP_ID>",
+    "myOutputData": "s3://<TEAM_S3_BUCKET>/emr-output/san-diego-flights.csv",
+    "myRDSUsername": "<USERNAME>",
+    "myMasterInstanceType": "m3.xlarge",
+    "myEC2InstanceType": "m3.medium",
+    "myLogs": "s3://<TEAM_S3_BUCKET>/logs",
+    "myInputData": "s3://<TEAM_S3_BUCKET>/emr-input/791696577_T_ONTIME_2015-01.csv",
+    "myEC2KeyPair": "<MY_KEY_PAIR>",
+    "myCoreInstanceCount": "1",
+    "myCoreInstanceType": "m3.xlarge",
+    "*myRDSPassword": "<RDS_DATEBASE_PASSWORD>",
+    "myRDSTableName": "<MY_TEAM_TABLE_NAME>"
+  }
+}
