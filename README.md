@@ -15,8 +15,8 @@
   - The output data looks like this:
 
 ```
-"2015-01-22","San Diego, CA","Detroit, MI","-6.00"
-"2015-01-22","San Diego, CA","Atlanta, GA","4.00"
+2015-01-22,"San Diego, CA","Detroit, MI",-6.00
+2015-01-22,"San Diego, CA","Atlanta, GA",4.00
 ...
 ```
 
