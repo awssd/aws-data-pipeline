@@ -32,3 +32,5 @@
   - Password: <PASSWORD>
 - Create a SQL Data Node
 
+## Diagram
+![diagram](presentation/assets/solution.png)
